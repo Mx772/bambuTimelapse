@@ -1,0 +1,15 @@
+services:
+  bambu-timelapse:
+    build: .
+    container_name: bambu-timelapse
+    restart: unless-stopped
+    # host networking lets the container reach your printer's IP directly
+    network_mode: host
+    volumes:
+      - ./data:/data
+    environment:
+      - DATA_DIR=/data
+    # With host networking, the app is accessible at http://<host-ip>:8080
+    # To use bridge networking instead, comment out network_mode and uncomment ports:
+    # ports:
+    #   - "8080:8080"
