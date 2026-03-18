@@ -4,6 +4,8 @@ Automatic timelapse capture for **Bambu Lab 3D printers**. Connects to your prin
 
 > Built with [Claude Code](https://claude.ai/claude-code) by Anthropic.
 
+> **Disclaimer:** This project is an independent, community-built tool and is not affiliated with, endorsed by, or associated with Bambu Lab Co., Ltd. in any way. All Bambu Lab product names are trademarks of their respective owner.
+
 ---
 
 ## Features

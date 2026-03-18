@@ -1,6 +1,6 @@
 services:
   bambu-timelapse:
-    build: .
+    image: ghcr.io/mx772/bambutimelapse:latest
     container_name: bambu-timelapse
     restart: unless-stopped
     # host networking lets the container reach your printer's IP directly
