@@ -7,6 +7,10 @@ logger = logging.getLogger(__name__)
 
 CRF_MAP = {"low": 28, "medium": 23, "high": 18}
 
+# Respect FFMPEG_THREADS env var so Docker resource limits have a cooperating
+# app-level cap. Defaults to 2 to avoid pegging all cores on large encodes.
+_FFMPEG_THREADS = str(max(1, int(os.environ.get("FFMPEG_THREADS", "2"))))
+
 
 async def generate_timelapse(
     frames_dir: str,
@@ -22,14 +26,19 @@ async def generate_timelapse(
         return False
 
     crf = CRF_MAP.get(quality, 23)
-    logger.info(f"Generating timelapse from {len(frames)} frames at {fps}fps (crf={crf})")
+    logger.info(
+        f"Generating timelapse from {len(frames)} frames "
+        f"at {fps}fps (crf={crf}, threads={_FFMPEG_THREADS})"
+    )
 
     cmd = [
         "ffmpeg",
+        "-threads", _FFMPEG_THREADS,   # global thread limit (decode + filter)
         "-framerate", str(fps),
         "-pattern_type", "glob",
         "-i", os.path.join(frames_dir, "*.jpg"),
         "-c:v", "libx264",
+        "-x264-params", f"threads={_FFMPEG_THREADS}",  # encoder thread limit
         "-pix_fmt", "yuv420p",
         "-crf", str(crf),
         "-movflags", "+faststart",

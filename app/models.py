@@ -1,3 +1,4 @@
+import os
 from pydantic import BaseModel
 from typing import Optional
 
@@ -21,6 +22,7 @@ class TimelapseConfig(BaseModel):
 
 class AppConfig(BaseModel):
     data_dir: str = "/data"
+    timezone: str = os.environ.get("TZ", "America/New_York")
 
 
 class Config(BaseModel):
@@ -33,6 +35,7 @@ class Config(BaseModel):
 class PrintMeta(BaseModel):
     id: str
     label: str = ""
+    file_name: str = ""       # original gcode/subtask name from printer
     start_time: str = ""
     end_time: Optional[str] = None
     total_layers: int = 0

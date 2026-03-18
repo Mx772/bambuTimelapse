@@ -2,8 +2,9 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Set
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
@@ -41,6 +42,19 @@ generating_prints: Set[str] = set()
 
 def get_prints_dir() -> str:
     return os.path.join(config_manager.config.app.data_dir, "prints")
+
+
+def _utcnow() -> str:
+    """Return current UTC time as ISO 8601 string."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _sanitize_name(name: str) -> str:
+    """Turn a gcode file name into a safe directory-name suffix."""
+    name = os.path.splitext(name)[0]                       # strip extension
+    name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)           # replace bad chars
+    name = re.sub(r"_+", "_", name).strip("_")             # collapse underscores
+    return name[:48]                                        # cap length
 
 
 async def broadcast(message: dict):
@@ -111,23 +125,29 @@ def _list_prints():
 # Print Session Logic
 # ---------------------------------------------------------------------------
 
-async def _new_print_session(layer: int = 0, total: int = 0) -> PrintMeta:
+async def _new_print_session(layer: int = 0, total: int = 0, file_name: str = "") -> PrintMeta:
     global current_print, layer_capture_counter
 
     # Gracefully close any prior session
     if current_print is not None:
         current_print.gcode_state = "INTERRUPTED"
-        current_print.end_time = datetime.now().isoformat()
+        current_print.end_time = _utcnow()
         _save_meta(current_print)
 
     layer_capture_counter = 0
-    print_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Directory name: timestamp (local TZ for readability) + sanitized file name
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe = _sanitize_name(file_name) if file_name else ""
+    print_id = f"{ts}_{safe}" if safe else ts
+
     frames_dir = os.path.join(get_prints_dir(), print_id, "frames")
     os.makedirs(frames_dir, exist_ok=True)
 
     meta = PrintMeta(
         id=print_id,
-        start_time=datetime.now().isoformat(),
+        label=file_name,
+        file_name=file_name,
+        start_time=_utcnow(),
         gcode_state="RUNNING",
         current_layer=layer,
         total_layers=total,
@@ -183,7 +203,7 @@ async def _handle_print_finish(print_id: str):
 
     if current_print and current_print.id == print_id:
         current_print.gcode_state = "FINISH"
-        current_print.end_time = datetime.now().isoformat()
+        current_print.end_time = _utcnow()
         _save_meta(current_print)
 
     await broadcast({"type": "print_finished", "print_id": print_id})
@@ -266,12 +286,13 @@ async def process_events():
             await broadcast({"type": "status", **event})
 
         elif event["type"] == "print_start":
-            await _new_print_session()
+            await _new_print_session(file_name=event.get("file_name", ""))
 
         elif event["type"] == "layer_change":
             # Lazy-create session if we connected mid-print
             if current_print is None:
-                await _new_print_session(event["layer"], event["total_layers"])
+                file_name = mqtt_client.subtask_name if mqtt_client else ""
+                await _new_print_session(event["layer"], event["total_layers"], file_name)
 
             layer_capture_counter += 1
             if current_print and layer_capture_counter % cfg.timelapse.capture_every_n_layers == 0:

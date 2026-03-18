@@ -1,8 +1,9 @@
 FROM python:3.12-slim
 
-# Install ffmpeg and system deps
+# Install ffmpeg and timezone data
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -18,6 +19,8 @@ COPY static/ ./static/
 # Data directory (mount a volume here)
 RUN mkdir -p /data
 ENV DATA_DIR=/data
+# Default timezone — override at runtime: docker run -e TZ=Europe/London ...
+ENV TZ=America/New_York
 
 EXPOSE 8088
 

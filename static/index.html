@@ -334,8 +334,15 @@
                     </div>
                     <div class="flex justify-between mt-1.5">
                       <span class="text-xs text-gray-500" x-text="`${status.mc_percent || 0}% complete`"></span>
-                      <span class="text-xs text-gray-500"
-                            x-text="status.mc_remaining_time ? `~${formatEta(status.mc_remaining_time)} remaining` : ''"></span>
+                      <span class="text-xs text-gray-500">
+                        <template x-if="status.mc_remaining_time > 0">
+                          <span>
+                            <span x-text="`~${formatEta(status.mc_remaining_time)} remaining`"></span>
+                            <span class="text-gray-600 ml-1"
+                                  x-text="formatEtaTime(status.mc_remaining_time) ? `(done ~${formatEtaTime(status.mc_remaining_time)})` : ''"></span>
+                          </span>
+                        </template>
+                      </span>
                     </div>
                   </div>
                 </template>
@@ -466,9 +473,15 @@
                   <!-- Label / title -->
                   <template x-if="!print._editingLabel">
                     <div class="flex items-center justify-between mb-1">
-                      <h3 class="text-sm font-semibold text-gray-200 truncate"
-                          x-text="print.label || formatDateShort(print.start_time)"></h3>
-                      <button @click="startEditLabel(print)" class="btn-ghost" style="padding:2px 6px;font-size:11px;">
+                      <div class="min-w-0 flex-1">
+                        <h3 class="text-sm font-semibold text-gray-200 truncate"
+                            x-text="print.label || print.file_name || formatDateShort(print.start_time)"></h3>
+                        <!-- Show file_name as subtitle if user has renamed it -->
+                        <template x-if="print.label && print.file_name && print.label !== print.file_name">
+                          <div class="text-xs text-gray-600 truncate" x-text="print.file_name"></div>
+                        </template>
+                      </div>
+                      <button @click="startEditLabel(print)" class="btn-ghost flex-shrink-0 ml-2" style="padding:2px 6px;font-size:11px;">
                         Edit
                       </button>
                     </div>
@@ -712,6 +725,25 @@
               </label>
             </div>
           </div>
+
+          <!-- Timezone -->
+          <div class="card space-y-4">
+            <div>
+              <label class="form-label">Timezone</label>
+              <input type="text" x-model="config.app.timezone"
+                     placeholder="America/New_York" />
+              <p class="text-xs text-gray-600 mt-1">
+                IANA timezone ID used for all date/time display and the ETA in the browser tab.
+                Examples: <code class="text-gray-500">America/Chicago</code>,
+                <code class="text-gray-500">Europe/London</code>,
+                <code class="text-gray-500">Asia/Tokyo</code>.
+                Match this to the <code class="text-gray-500">TZ</code> environment variable in your Docker config.
+              </p>
+              <p class="text-xs mt-1" style="color:#a78bfa;">
+                Current: <span x-text="new Date().toLocaleString(undefined, { timeZone: config.app.timezone || 'UTC', timeZoneName: 'short' }).split(' ').pop()"></span>
+              </p>
+            </div>
+          </div>
         </div>
 
         <!-- Save button (always visible) -->
@@ -826,6 +858,7 @@
           layer: 0, total_layers: 0, gcode_state: '',
           mc_percent: 0, mc_remaining_time: 0,
           nozzle_temp: 0, bed_temp: 0,
+          subtask_name: '',
         },
 
         // Active print
@@ -841,7 +874,7 @@
           printer: { ip: '', serial: '', access_code: '' },
           camera: { rtsp_url: '' },
           timelapse: { fps: 24, quality: 'high', auto_generate: true, capture_every_n_layers: 1 },
-          app: { data_dir: '/data' },
+          app: { data_dir: '/data', timezone: 'America/New_York' },
         },
         savingConfig: false,
         connectingPrinter: false,
@@ -867,6 +900,8 @@
           this.initWs();
           await this.loadPrints();
           this._startLiveFramePoll();
+          this.$watch('status', () => this._updateTitle());
+          this.$watch('currentPrint', () => this._updateTitle());
         },
 
         // ---------------------------------------------------------------
@@ -912,6 +947,7 @@
                 gcode_state: msg.gcode_state, mc_percent: msg.mc_percent,
                 mc_remaining_time: msg.mc_remaining_time,
                 nozzle_temp: msg.nozzle_temp, bed_temp: msg.bed_temp,
+                subtask_name: msg.subtask_name || this.status.subtask_name,
               });
               break;
 
@@ -1139,10 +1175,42 @@
         },
 
         // ---------------------------------------------------------------
+        // Page title
+        _updateTitle() {
+          const s = this.status;
+          const tz = this.config.app?.timezone || 'America/New_York';
+          const name = s.subtask_name || (this.currentPrint?.file_name) || '';
+
+          if (s.gcode_state === 'RUNNING') {
+            let title = name ? `${name} · ` : '';
+            title += `${s.mc_percent || 0}%`;
+            if (s.mc_remaining_time > 0) {
+              const etaDate = new Date(Date.now() + s.mc_remaining_time * 60 * 1000);
+              const etaStr = etaDate.toLocaleTimeString(undefined, {
+                timeZone: tz, hour: '2-digit', minute: '2-digit',
+              });
+              title += ` · done ~${etaStr}`;
+            }
+            document.title = `${title} — BambuTimelapse`;
+          } else if (s.gcode_state === 'PAUSE') {
+            document.title = `[PAUSED ${s.mc_percent || 0}%] — BambuTimelapse`;
+          } else if (s.gcode_state === 'PREPARE') {
+            document.title = `[PREPARING] — BambuTimelapse`;
+          } else if (s.gcode_state === 'FINISH') {
+            document.title = `[FINISHED] — BambuTimelapse`;
+          } else {
+            document.title = 'BambuTimelapse';
+          }
+        },
+
+        // ---------------------------------------------------------------
         // Formatters
+        _tz() { return this.config.app?.timezone || 'America/New_York'; },
+
         formatDate(iso) {
           if (!iso) return '';
           return new Date(iso).toLocaleString(undefined, {
+            timeZone: this._tz(),
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
           });
         },
@@ -1150,6 +1218,7 @@
         formatDateShort(iso) {
           if (!iso) return 'Unknown';
           return new Date(iso).toLocaleDateString(undefined, {
+            timeZone: this._tz(),
             month: 'short', day: 'numeric', year: 'numeric',
           });
         },
@@ -1159,6 +1228,15 @@
           const h = Math.floor(minutes / 60);
           const m = minutes % 60;
           return h > 0 ? `${h}h ${m}m` : `${m}m`;
+        },
+
+        formatEtaTime(minutes) {
+          // Returns the wall-clock time when the print will finish
+          if (!minutes || minutes <= 0) return null;
+          const etaDate = new Date(Date.now() + minutes * 60 * 1000);
+          return etaDate.toLocaleTimeString(undefined, {
+            timeZone: this._tz(), hour: '2-digit', minute: '2-digit',
+          });
         },
 
         formatDuration(start, end) {

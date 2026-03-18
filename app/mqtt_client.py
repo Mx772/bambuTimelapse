@@ -35,6 +35,7 @@ class BambuMQTTClient:
         self.mc_remaining_time: int = 0
         self.nozzle_temp: float = 0.0
         self.bed_temp: float = 0.0
+        self.subtask_name: str = ""  # print file/task name from printer
 
     @property
     def is_connected(self) -> bool:
@@ -163,6 +164,11 @@ class BambuMQTTClient:
             self.nozzle_temp = float(p["nozzle_temper"])
         if "bed_temper" in p:
             self.bed_temp = float(p["bed_temper"])
+        # subtask_name is the print file name; prefer subtask_name, fall back to gcode_file
+        if "subtask_name" in p and p["subtask_name"]:
+            self.subtask_name = str(p["subtask_name"])
+        elif "gcode_file" in p and p["gcode_file"] and not self.subtask_name:
+            self.subtask_name = str(p["gcode_file"])
 
         # Always emit current status
         self._emit({
@@ -174,6 +180,7 @@ class BambuMQTTClient:
             "mc_remaining_time": self.mc_remaining_time,
             "nozzle_temp": self.nozzle_temp,
             "bed_temp": self.bed_temp,
+            "subtask_name": self.subtask_name,
         })
 
         # Detect new print start: transition to active state from idle/finished
@@ -182,7 +189,7 @@ class BambuMQTTClient:
             and prev_state in ("IDLE", "FINISH", "FAILED", "")
             and self.current_layer <= 1
         ):
-            self._emit({"type": "print_start"})
+            self._emit({"type": "print_start", "file_name": self.subtask_name})
 
         # Detect layer advance while printing
         if (
@@ -216,4 +223,5 @@ class BambuMQTTClient:
             "mc_remaining_time": self.mc_remaining_time,
             "nozzle_temp": self.nozzle_temp,
             "bed_temp": self.bed_temp,
+            "subtask_name": self.subtask_name,
         }

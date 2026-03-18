@@ -9,7 +9,26 @@ services:
       - ./data:/data
     environment:
       - DATA_DIR=/data
-    # With host networking, the app is accessible at http://<host-ip>:8080
+      - TZ=America/New_York   # Change to your timezone, e.g. Europe/London, Asia/Tokyo
+      # Caps the ffmpeg thread count inside the app (second layer after Docker limits below)
+      - FFMPEG_THREADS=2
+    # With host networking, the app is accessible at http://<host-ip>:8088
     # To use bridge networking instead, comment out network_mode and uncomment ports:
     # ports:
-    #   - "8080:8080"
+    #   - "8088:8088"
+
+    # -------------------------------------------------------------------------
+    # Resource limits — prevents timelapse generation from starving the host.
+    # Tune these to your hardware. Rules of thumb:
+    #   cpus:   leave at least 1-2 cores free for the rest of the host
+    #   memory: ffmpeg needs ~2–4× the size of the largest frame batch in RAM
+    #           256 MB baseline + ~10 MB per 1000 frames is a safe estimate
+    # -------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'       # hard cap: never use more than 2 logical CPUs
+          memory: 1536M     # hard cap: 1.5 GB RAM
+        reservations:
+          cpus: '0.25'      # guaranteed minimum so the web UI stays responsive
+          memory: 256M      # guaranteed baseline
