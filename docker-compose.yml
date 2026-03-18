@@ -3,8 +3,6 @@ services:
     image: ghcr.io/mx772/bambutimelapse:latest
     container_name: bambu-timelapse
     restart: unless-stopped
-    # host networking lets the container reach your printer's IP directly
-    network_mode: host
     volumes:
       - ./data:/data
     environment:
@@ -12,10 +10,8 @@ services:
       - TZ=America/New_York   # Change to your timezone, e.g. Europe/London, Asia/Tokyo
       # Caps the ffmpeg thread count inside the app (second layer after Docker limits below)
       - FFMPEG_THREADS=2
-    # With host networking, the app is accessible at http://<host-ip>:8088
-    # To use bridge networking instead, comment out network_mode and uncomment ports:
-    # ports:
-    #   - "8088:8088"
+    ports:
+      - "8088:8088"
 
     # -------------------------------------------------------------------------
     # Resource limits — prevents timelapse generation from starving the host.
