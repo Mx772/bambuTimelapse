@@ -22,6 +22,20 @@ Automatic timelapse capture for **Bambu Lab 3D printers**. Connects to your prin
 - **Multi-arch Docker image** — `linux/amd64` + `linux/arm64` (Raspberry Pi 4/5 compatible)
 
 ---
+## Screenshots
+
+### Print Status
+<img width="2318" height="543" alt="image" src="https://github.com/user-attachments/assets/1d6c0ef5-90c7-4ab4-b41d-d4143a752c8a" />
+
+### Gallery
+<img width="2304" height="662" alt="image" src="https://github.com/user-attachments/assets/aecaaffc-ecf5-4303-a935-5af12592a124" />
+
+### Settings
+<img width="564" height="804" alt="image" src="https://github.com/user-attachments/assets/129cdbcd-d410-4172-9c45-859114f00f0b" />
+
+
+---
+
 
 ## Quick Start (Docker — recommended)
 
